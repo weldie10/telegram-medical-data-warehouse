@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (for Tasks 2-5)
+  postgres:
+    image: postgres:15-alpine
+    container_name: medical_warehouse_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-medical_warehouse}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medical_warehouse_network
+
+  # Scraper Service (Task 1)
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medical_warehouse_scraper
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./telegram_session.session:/app/telegram_session.session
+    depends_on:
+      - postgres
+    command: python src/scraper.py
+    networks:
+      - medical_warehouse_network
+    restart: unless-stopped
+
+  # API Service (Task 4)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medical_warehouse_api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app/api
+      - ./src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - medical_warehouse_network
+    restart: unless-stopped
+    profiles:
+      - api  # Only start with --profile api
+
+  # Dagster Web Server (Task 5)
+  dagster:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medical_warehouse_dagster
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: dagster dev -f pipeline.py -m dagster_webserver -h 0.0.0.0 -p 3000
+    networks:
+      - medical_warehouse_network
+    restart: unless-stopped
+    profiles:
+      - dagster  # Only start with --profile dagster
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  medical_warehouse_network:
+    driver: bridge
