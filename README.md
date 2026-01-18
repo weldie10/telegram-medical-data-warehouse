@@ -170,6 +170,99 @@ data/
             └── {channel_name}.json
 ```
 
+## Task 2: Data Modeling and Transformation
+
+### Prerequisites
+
+- PostgreSQL database running (use Docker Compose or local installation)
+- Raw data loaded from Task 1
+
+### Setup dbt
+
+1. **Install dbt packages:**
+   ```bash
+   cd medical_warehouse
+   dbt deps
+   ```
+
+2. **Verify database connection:**
+   ```bash
+   dbt debug
+   ```
+
+### Load Raw Data to PostgreSQL
+
+```bash
+python scripts/load_raw_to_postgres.py
+```
+
+This script:
+- Creates `raw` schema in PostgreSQL
+- Creates `raw.telegram_messages` table
+- Loads all JSON files from the data lake
+- Handles duplicates and data validation
+
+### Run dbt Transformations
+
+**Option 1: Using the automated script (Recommended)**
+```bash
+./scripts/run_task2.sh
+```
+
+**Option 2: Manual steps**
+```bash
+cd medical_warehouse
+
+# Build staging models
+dbt run --select staging
+
+# Build marts (dimensions and facts)
+dbt run --select marts
+
+# Run tests
+dbt test
+
+# Generate documentation
+dbt docs generate
+dbt docs serve  # Opens documentation in browser
+```
+
+### Star Schema Structure
+
+The dbt project creates a dimensional star schema:
+
+**Dimension Tables:**
+- `marts.dim_channels`: Channel information and statistics
+- `marts.dim_dates`: Date dimension for time-based analysis
+
+**Fact Table:**
+- `marts.fct_messages`: One row per message with foreign keys to dimensions
+
+**Staging Layer:**
+- `staging.stg_telegram_messages`: Cleaned and standardized raw data
+
+### dbt Tests
+
+The project includes:
+- **Built-in tests**: `unique`, `not_null`, `relationships`, `accepted_values`
+- **Custom tests**:
+  - `assert_no_future_messages.sql`: Ensures no messages have future dates
+  - `assert_positive_views.sql`: Ensures view counts are non-negative
+  - `assert_valid_date_range.sql`: Validates date ranges
+
+### View Documentation
+
+```bash
+cd medical_warehouse
+dbt docs serve
+```
+
+This opens the dbt documentation in your browser showing:
+- Model lineage (DAG)
+- Column descriptions
+- Test results
+- Data profiling
+
 ## Development
 
 ### Running Tests
