@@ -1,279 +1,64 @@
 # Medical Telegram Data Warehouse
 
-An end-to-end data pipeline for Telegram medical channels, leveraging dbt for transformation, Dagster for orchestration, and YOLOv8 for data enrichment.
+End-to-end data pipeline for Telegram medical channels with dbt transformation, YOLOv8 image analysis, and FastAPI analytics.
 
-## Project Overview
+## Quick Start
 
-This project builds a robust data platform that generates actionable insights about Ethiopian medical businesses using data scraped from public Telegram channels.
+```bash
+# 1. Setup
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Configure
+cp env.template .env
+# Edit .env with your Telegram API credentials
+
+# 3. Scrape data
+python src/scraper.py
+
+# 4. Load to database
+python scripts/load_raw_to_postgres.py
+
+# 5. Transform with dbt
+cd medical_warehouse
+dbt deps
+dbt run
+
+# 6. Run API
+uvicorn api.main:app --reload
+```
 
 ## Project Structure
 
 ```
-medical-telegram-warehouse/
-├── .vscode/
-│   └── settings.json
-├── .github/
-│   └── workflows/
-│       └── unittests.yml
-├── .env               # Secrets (API keys, DB passwords) - DO NOT COMMIT
-├── env.template       # Environment variables template
-├── .gitignore
-├── docker-compose.yml  # Container orchestration
-├── Dockerfile          # Python environment
-├── .dockerignore       # Docker build exclusions
-├── requirements.txt
-├── README.md
-├── data/
-│   └── raw/
-│       ├── images/
-│       └── telegram_messages/
-├── medical_warehouse/            # dbt project
-│   ├── dbt_project.yml
-│   ├── profiles.yml
-│   ├── models/
-│   │   ├── staging/
-│   │   └── marts/
-│   └── tests/
-├── src/
-│   ├── __init__.py
-│   └── scraper.py
-├── api/
-│   ├── __init__.py
-│   ├── main.py                   # FastAPI application
-│   ├── database.py               # Database connection
-│   └── schemas.py                # Pydantic models
-├── notebooks/
-│   └── __init__.py
-├── tests/
-│   └── __init__.py
-└── scripts/
+├── src/              # Telegram scraper
+├── api/              # FastAPI analytics endpoints
+├── medical_warehouse/ # dbt models (star schema)
+├── scripts/          # Data loading and utilities
+└── data/raw/          # Raw data lake (gitignored)
 ```
 
-## Setup Instructions
+## Features
 
-### 1. Clone the Repository
+- **Task 1**: Telegram channel scraping with image download
+- **Task 2**: dbt star schema (dim_channels, dim_dates, fct_messages)
+- **Task 3**: YOLOv8 image detection and classification
+- **Task 4**: FastAPI analytical endpoints
 
-```bash
-git clone <repository-url>
-cd telegram-medical-data-warehouse
-```
+## API Endpoints
 
-### 2. Create Virtual Environment
+- `GET /api/reports/top-products` - Most mentioned products
+- `GET /api/channels/{name}/activity` - Channel activity trends
+- `GET /api/search/messages?query=term` - Search messages
+- `GET /api/reports/visual-content` - Image statistics
+- `GET /docs` - API documentation
 
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+## Environment Variables
 
-### 3. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-
-1. Copy `env.template` to `.env`:
-   ```bash
-   cp env.template .env
-   ```
-
-2. Get Telegram API credentials:
-   - Visit https://my.telegram.org/apps
-   - Create a new application
-   - Copy your `api_id` and `api_hash`
-
-3. Update `.env` with your credentials:
-   ```
-   TELEGRAM_API_ID=your_api_id_here
-   TELEGRAM_API_HASH=your_api_hash_here
-   TELEGRAM_PHONE=+251912345678
-   ```
-
-## Docker Setup (Alternative)
-
-### Using Docker Compose
-
-1. **Set up environment variables:**
-   ```bash
-   cp env.template .env
-   # Edit .env with your credentials
-   ```
-
-2. **Build and start services:**
-   ```bash
-   # Start PostgreSQL and scraper
-   docker-compose up -d postgres scraper
-   
-   # Start API (Task 4)
-   docker-compose --profile api up -d api
-   
-   # Start Dagster (Task 5)
-   docker-compose --profile dagster up -d dagster
-   ```
-
-3. **View logs:**
-   ```bash
-   docker-compose logs -f scraper
-   ```
-
-4. **Stop services:**
-   ```bash
-   docker-compose down
-   ```
-
-### Using Dockerfile Only
-
-```bash
-# Build the image
-docker build -t medical-warehouse .
-
-# Run the scraper
-docker run --rm \
-  --env-file .env \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/logs:/app/logs \
-  medical-warehouse python src/scraper.py
-```
-
-## Task 1: Data Scraping and Collection
-
-### Running the Scraper
-
-```bash
-python src/scraper.py
-```
-
-The scraper will:
-- Extract messages from configured Telegram channels
-- Download images to `data/raw/images/{channel_name}/{message_id}.jpg`
-- Save raw JSON data to `data/raw/telegram_messages/YYYY-MM-DD/channel_name.json`
-- Generate logs in `logs/` directory
-
-### Channels Scraped
-
-- CheMed Telegram Channel
-- Lobelia Cosmetics (https://t.me/lobelia4cosmetics)
-- Tikvah Pharma (https://t.me/tikvahpharma)
-- Additional channels from https://et.tgstat.com/medicine
-
-## Data Lake Structure
-
-```
-data/
-└── raw/
-    ├── images/
-    │   └── {channel_name}/
-    │       └── {message_id}.jpg
-    └── telegram_messages/
-        └── YYYY-MM-DD/
-            └── {channel_name}.json
-```
-
-## Task 2: Data Modeling and Transformation
-
-### Prerequisites
-
-- PostgreSQL database running (use Docker Compose or local installation)
-- Raw data loaded from Task 1
-
-### Setup dbt
-
-1. **Install dbt packages:**
-   ```bash
-   cd medical_warehouse
-   dbt deps
-   ```
-
-2. **Verify database connection:**
-   ```bash
-   dbt debug
-   ```
-
-### Load Raw Data to PostgreSQL
-
-```bash
-python scripts/load_raw_to_postgres.py
-```
-
-This script:
-- Creates `raw` schema in PostgreSQL
-- Creates `raw.telegram_messages` table
-- Loads all JSON files from the data lake
-- Handles duplicates and data validation
-
-### Run dbt Transformations
-
-**Option 1: Using the automated script (Recommended)**
-```bash
-./scripts/run_task2.sh
-```
-
-**Option 2: Manual steps**
-```bash
-cd medical_warehouse
-
-# Build staging models
-dbt run --select staging
-
-# Build marts (dimensions and facts)
-dbt run --select marts
-
-# Run tests
-dbt test
-
-# Generate documentation
-dbt docs generate
-dbt docs serve  # Opens documentation in browser
-```
-
-### Star Schema Structure
-
-The dbt project creates a dimensional star schema:
-
-**Dimension Tables:**
-- `marts.dim_channels`: Channel information and statistics
-- `marts.dim_dates`: Date dimension for time-based analysis
-
-**Fact Table:**
-- `marts.fct_messages`: One row per message with foreign keys to dimensions
-
-**Staging Layer:**
-- `staging.stg_telegram_messages`: Cleaned and standardized raw data
-
-### dbt Tests
-
-The project includes:
-- **Built-in tests**: `unique`, `not_null`, `relationships`, `accepted_values`
-- **Custom tests**:
-  - `assert_no_future_messages.sql`: Ensures no messages have future dates
-  - `assert_positive_views.sql`: Ensures view counts are non-negative
-  - `assert_valid_date_range.sql`: Validates date ranges
-
-### View Documentation
-
-```bash
-cd medical_warehouse
-dbt docs serve
-```
-
-This opens the dbt documentation in your browser showing:
-- Model lineage (DAG)
-- Column descriptions
-- Test results
-- Data profiling
-
-## Development
-
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Code Style
-
-This project follows PEP 8 style guidelines.
+See `env.template` for required variables:
+- `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`
+- `POSTGRES_HOST` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`
 
 ## License
 
